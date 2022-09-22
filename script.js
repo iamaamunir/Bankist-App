@@ -44,6 +44,8 @@ const labelSumOut = document.querySelector(".summary__value--out");
 const labelSumInterest = document.querySelector(".summary__value--interest");
 const labelTimer = document.querySelector(".timer");
 
+const labelLoanDetails = document.querySelector(".form__label");
+
 const containerApp = document.querySelector(".app");
 const containerMovements = document.querySelector(".movements");
 
@@ -73,10 +75,10 @@ const createUsername = function (accs) {
 };
 createUsername(accounts);
 
-const displayMovements = function (movements) {
-  //   containerMovements.innerHTML = '';
-
-  movements.forEach(function (mov, i) {
+const displayMovements = function (movements, sort = false) {
+  containerMovements.innerHTML = "";
+  const movs = sort ? movements.slice().sort((a, b) => a - b) : movements;
+  movs.forEach(function (mov, i) {
     const type = mov > 0 ? "deposit" : "withdrawal";
     const html = `<div class="movements__row">
         <div class="movements__type movements__type--${type}">${
@@ -90,8 +92,25 @@ const displayMovements = function (movements) {
 };
 
 const calcDisplayBalance = function (acc) {
-  const balance = acc.movements.reduce((acc, cur) => acc + cur, 0);
-  labelBalance.textContent = `${balance}€`;
+  acc.balance = acc.movements.reduce((acc, cur) => acc + cur, 0);
+  labelBalance.textContent = `${acc.balance}€`;
+};
+
+const calcDisplaySummary = function (acc) {
+  const income = acc.movements
+    .filter((mov) => mov > 0)
+    .reduce((acc, cur) => acc + cur, 0);
+  labelSumIn.textContent = `${income}€`;
+  const outgoingSum = acc.movements
+    .filter((mov) => mov < 0)
+    .reduce((acc, cur) => acc + cur, 0);
+  labelSumOut.textContent = `${Math.abs(outgoingSum)}€`;
+  const interestSum = acc.movements
+    .filter((mov) => mov > 0)
+    .map((deposits) => (deposits * acc.interestRate) / 100)
+    .filter((interest) => interest > 1)
+    .reduce((acc, cur) => acc + cur, 0);
+  labelSumInterest.textContent = `${interestSum}€`;
 };
 
 // Login and display user UI
@@ -106,7 +125,66 @@ btnLogin.addEventListener("click", function (e) {
     labelWelcome.textContent = `Welcome back ${
       currentAccount.owner.split(" ")[0]
     }`;
+    inputLoginUsername.value = inputLoginPin.value = "";
+    inputLoginPin.blur();
+
+    displayMovements(currentAccount.movements);
+    calcDisplayBalance(currentAccount);
+    calcDisplaySummary(currentAccount);
   }
-  displayMovements(currentAccount.movements);
-  calcDisplayBalance(currentAccount);
+});
+
+btnTransfer.addEventListener("click", function (e) {
+  e.preventDefault();
+  const amount = Number(inputTransferAmount.value);
+  const receiver = inputTransferTo.value;
+  const receiverAccount = accounts.find((acc) => acc.username == receiver);
+  if (
+    amount > 0 &&
+    amount <= currentAccount.balance &&
+    receiverAccount?.username !== currentAccount.username &&
+    receiverAccount
+  ) {
+    currentAccount.movements.push(-amount);
+    receiverAccount.movements.push(amount);
+    displayMovements(currentAccount.movements);
+    calcDisplayBalance(currentAccount);
+    calcDisplaySummary(currentAccount);
+  }
+});
+
+btnLoan.addEventListener("click", function (e) {
+  e.preventDefault();
+  const loanAmount = Number(inputLoanAmount.value);
+  const loanApproval = currentAccount.movements
+    .filter((mov) => mov > 0)
+    .map((deposits) => deposits > loanAmount * 0.1);
+  if (loanApproval) {
+    currentAccount.movements.push(loanAmount);
+    displayMovements(currentAccount.movements);
+    calcDisplayBalance(currentAccount);
+    calcDisplaySummary(currentAccount);
+  }
+});
+
+btnClose.addEventListener("click", function (e) {
+  e.preventDefault();
+  if (
+    currentAccount.username == inputCloseUsername.value &&
+    currentAccount.pin == Number(inputClosePin.value)
+  ) {
+    const accIndex = accounts.findIndex(
+      (user) => user.username === currentAccount.username
+    );
+    accounts.splice(accIndex, 1);
+    inputClosePin.value = inputCloseUsername.value = "";
+    containerApp.style.opacity = 0;
+  }
+});
+
+let sorted = false;
+btnSort.addEventListener("click", function (e) {
+  e.preventDefault();
+  displayMovements(currentAccount.movements, !sorted);
+  sorted = !sorted;
 });
